@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A股全市场每日涨跌中位数</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --surface:#1a1a19; --page:#0d0d0d;
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+    --up:#e4534a;      /* 涨·红 (A股惯例) */
+    --down:#16b070;    /* 跌·绿 */
+    --blue:#3987e5;    /* 累计线 */
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--page); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:32px 20px 60px}
+  header{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px}
+  h1{font-size:20px; font-weight:650; margin:0; letter-spacing:.2px}
+  .sub{color:var(--muted); font-size:13px}
+  .tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:18px 0 24px}
+  @media(max-width:680px){.tiles{grid-template-columns:repeat(2,1fr)}}
+  .tile{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; display:flex; flex-direction:column; gap:6px;
+  }
+  .tile .k{color:var(--muted); font-size:12px}
+  .tile .v{font-size:24px; font-weight:640; font-variant-numeric:tabular-nums; line-height:1}
+  .tile .u{color:var(--ink2); font-size:12px}
+  .pos{color:var(--up)} .neg{color:var(--down)}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:16px 12px 8px; margin-bottom:18px;
+  }
+  .card h2{font-size:14px; font-weight:600; margin:2px 6px 0; color:var(--ink2)}
+  .card h2 span{color:var(--muted); font-weight:400; font-size:12px}
+  #main{height:360px} #cum{height:240px}
+  footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
+  .miss{padding:40px; text-align:center; color:var(--muted)}
+  code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>A股全市场 · 每日涨跌幅中位数</h1>
+    <div class="sub" id="updated"></div>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>日中位数 <span>· 全市场当日涨跌幅的中位数(剔停牌)，红涨绿跌</span></h2>
+    <div id="main"></div>
+  </div>
+
+  <div class="card">
+    <h2>累计中位数 <span>· 日中位数逐日累加，反映长期资金冷暖</span></h2>
+    <div id="cum"></div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+const D = window.MEDIAN_DATA;
+const $ = s => document.querySelector(s);
+const C = {up:'#e4534a', down:'#16b070', blue:'#3987e5', ink:'#fff', ink2:'#c3c2b7',
+           muted:'#898781', grid:'#2c2c2a', baseline:'#383835', surface:'#1a1a19'};
+
+function sign(v){return v>=0?'pos':'neg'}
+function fmt(v){return (v>=0?'+':'')+v.toFixed(2)+'%'}
+
+let mMain, mCum, V;  // 图实例 + 当前切片数据
+
+// 今年以来切片; 累计从 0 起重算
+function slice(){
+  const cut = D.dates[D.dates.length-1].slice(0,4)+'-01-01';
+  const i0 = D.dates.findIndex(d=>d>=cut);
+  const s = i0<0 ? D.dates.length : i0;
+  const median = D.median.slice(s);
+  let run=0; const cum = median.map(v=>+(run+=v).toFixed(3));
+  return {dates:D.dates.slice(s), median, cum,
+          count:D.count.slice(s), upRatio:D.upRatio.slice(s)};
+}
+
+const tip = {
+  trigger:'axis', backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
+  textStyle:{color:C.ink, fontSize:12},
+  axisPointer:{type:'cross', lineStyle:{color:C.muted, type:'dashed'},
+               crossStyle:{color:C.muted}, label:{backgroundColor:'#333'}},
+};
+const yBase = () => ({
+  type:'value', axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
+  splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false},
+});
+const xBase = () => ({
+  type:'category', boundaryGap:false, axisLine:{lineStyle:{color:C.baseline}},
+  axisTick:{show:false}, axisLabel:{color:C.muted, fontSize:11, formatter:d=>d.slice(5)},
+});
+
+function buildCharts(){
+  mMain = echarts.init($('#main'), null, {renderer:'canvas'});
+  mMain.setOption({
+    grid:{left:52, right:20, top:24, bottom:36},
+    tooltip:{...tip, formatter:p=>{
+      const i=p[0].dataIndex;
+      return `${V.dates[i]}<br>日中位数 <b>${fmt(V.median[i])}</b><br>`+
+        `上涨占比 ${V.upRatio[i].toFixed(1)}%<br>样本 ${V.count[i]} 股`;
+    }},
+    xAxis:{...xBase(), boundaryGap:true}, yAxis:yBase(),
+    series:[{type:'bar', barMaxWidth:6,
+      itemStyle:{color:p=>p.value>=0?C.up:C.down, borderRadius:1},
+      markLine:{silent:true, symbol:'none',
+        lineStyle:{color:C.baseline}, data:[{yAxis:0}], label:{show:false}}}],
+  });
+  mCum = echarts.init($('#cum'), null, {renderer:'canvas'});
+  mCum.setOption({
+    grid:{left:52, right:20, top:20, bottom:28},
+    tooltip:{...tip, formatter:p=>`${V.dates[p[0].dataIndex]}<br>累计 <b>${fmt(V.cum[p[0].dataIndex])}</b>`},
+    xAxis:xBase(), yAxis:yBase(),
+    series:[{type:'line', showSymbol:false, lineStyle:{width:2, color:C.blue},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,
+        [{offset:0,color:'rgba(57,135,229,.28)'},{offset:1,color:'rgba(57,135,229,0)'}])},
+      markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},
+        data:[{yAxis:0}], label:{show:false}}}],
+  });
+}
+
+function applyRange(){
+  V = slice();
+  const last = V.dates.length-1;
+  const upDays = V.median.filter(v=>v>=0).length;
+  const cumU = '今年累加';
+  const tiles = [
+    {k:'最新日中位数', v:fmt(V.median[last]), cls:sign(V.median[last]), u:V.dates[last]},
+    {k:'累计中位数', v:fmt(V.cum[last]), cls:sign(V.cum[last]), u:cumU},
+    {k:'最新上涨占比', v:V.upRatio[last].toFixed(1)+'%', cls:V.upRatio[last]>=50?'pos':'neg', u:'当日上涨家数/样本'},
+    {k:'红盘天数', v:upDays+' / '+V.dates.length, cls:'', u:'中位数≥0的交易日'},
+  ];
+  $('#tiles').innerHTML = tiles.map(t=>
+    `<div class="tile"><span class="k">${t.k}</span>`+
+    `<span class="v ${t.cls}">${t.v}</span><span class="u">${t.u}</span></div>`).join('');
+  mMain.setOption({xAxis:{data:V.dates}, series:[{data:V.median}]});
+  mCum.setOption({xAxis:{data:V.dates}, series:[{data:V.cum}]});
+}
+
+// 入口: 所有声明就绪后再执行
+if(!D){
+  $('.wrap').innerHTML = '<div class="miss">未找到 <code>data.js</code>。先运行 '+
+    '<code>python median_trend.py</code> 生成数据。</div>';
+} else {
+  $('#updated').textContent = '更新于 '+D.updated;
+  buildCharts();
+  applyRange();
+}
+
+addEventListener('resize', ()=>{ mMain?.resize(); mCum?.resize(); });
+
+$('#foot').innerHTML =
+  '数据源：baostock(日线) · 免费无需 token。'+
+  '<br>中位数 = 全市场当日涨跌幅排序取中，剔除停牌；抗极端值，反映"多数个股"的真实涨跌，不受权重股绑架。';
+</script>
+</body>
+</html>
