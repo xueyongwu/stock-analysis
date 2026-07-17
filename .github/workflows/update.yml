@@ -2,7 +2,7 @@ name: daily-update
 
 on:
   schedule:
-    - cron: "30 10 * * 1-5"  # UTC 10:30 = 北京 18:30, 工作日; baostock 当日数据 ~17:30 后可用
+    - cron: "0 10 * * 1-5"  # UTC 10:00 = 北京 18:00, 工作日; baostock 当日数据 ~17:30 后可用
   workflow_dispatch:          # 手动触发
 
 permissions:
