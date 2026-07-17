@@ -151,7 +151,7 @@ def export_data_js(df: pd.DataFrame, out: Path):
         "cum": cum.tolist(),
         "count": n.astype(int).tolist(),
         "upRatio": (up / n * 100).round(1).tolist(),  # 上涨家数占比 %
-        "updated": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
+        "updated": pd.Timestamp.now(tz="Asia/Shanghai").strftime("%Y-%m-%d %H:%M"),
     }
     out.write_text("window.MEDIAN_DATA=" + json.dumps(payload, ensure_ascii=False) + ";\n",
                    encoding="utf-8")
