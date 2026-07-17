@@ -3,3 +3,4 @@ __pycache__/
 cache/cron.log
 cache/*
 !cache/daily_pctchg.parquet
+!cache/intraday_159696_1min.parquet

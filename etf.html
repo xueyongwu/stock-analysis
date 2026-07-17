@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>159696 纳指ETF · 日K与分时</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕯️</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --surface:#1a1a19; --page:#0d0d0d;
+    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+    --up:#e4534a; --down:#16b070; --blue:#3987e5; --avg:#d9a441;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--page); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:32px 20px 60px}
+  header{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px}
+  h1{font-size:20px; font-weight:650; margin:0; letter-spacing:.2px}
+  .sub{color:var(--muted); font-size:13px}
+  .sub a{color:var(--blue); text-decoration:none}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:16px 12px 8px; margin:18px 0;
+  }
+  .card h2{font-size:14px; font-weight:600; margin:2px 6px 0; color:var(--ink2)}
+  .card h2 span{color:var(--muted); font-weight:400; font-size:12px}
+  #kline{height:380px} #intraday{height:300px}
+  footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
+  .miss{padding:40px; text-align:center; color:var(--muted)}
+  code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>159696 纳指ETF易方达 · 日K与分时</h1>
+    <div class="sub"><a href="index.html">← 中位数看板</a> · <span id="updated"></span></div>
+  </header>
+
+  <div class="card">
+    <h2>日K <span>· 点击K线看当日分时</span></h2>
+    <div id="kline"></div>
+  </div>
+
+  <div class="card">
+    <h2 id="ititle">分时</h2>
+    <div id="intraday"></div>
+  </div>
+
+  <footer>数据源：新浪 1min bar，每日增量累积。历史深度从首拉日起逐日增长。</footer>
+</div>
+
+<script src="etf_data.js"></script>
+<script>
+const D = window.ETF_DATA;
+const $ = s => document.querySelector(s);
+const C = {up:'#e4534a', down:'#16b070', blue:'#3987e5', avg:'#d9a441', ink:'#fff',
+           ink2:'#c3c2b7', muted:'#898781', grid:'#2c2c2a', baseline:'#383835'};
+
+const tip = {
+  trigger:'axis', backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
+  textStyle:{color:C.ink, fontSize:12},
+  axisPointer:{type:'cross', lineStyle:{color:C.muted, type:'dashed'},
+               crossStyle:{color:C.muted}, label:{backgroundColor:'#333'}},
+};
+const yBase = () => ({
+  type:'value', scale:true, axisLabel:{color:C.muted, fontSize:11},
+  splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false},
+});
+
+function fmtVol(v){return v>=1e8 ? (v/1e8).toFixed(2)+'亿' : (v/1e4).toFixed(1)+'万'}
+function px(v){return v.toFixed(3)}
+function pct(a,b){return ((a/b-1)*100).toFixed(2)+'%'}
+
+let mK, mI;
+
+function buildKline(){
+  const dates = D.kline.map(r=>r[0]);
+  mK = echarts.init($('#kline'), null, {renderer:'canvas'});
+  mK.setOption({
+    grid:{left:56, right:20, top:24, bottom:36},
+    tooltip:{...tip, formatter:ps=>{
+      const i = ps[0].dataIndex, r = D.kline[i];
+      const prev = i>0 ? D.kline[i-1][2] : r[1];
+      return `${r[0]}<br>开 ${px(r[1])}  收 <b>${px(r[2])}</b> (${pct(r[2],prev)})<br>`+
+        `低 ${px(r[3])}  高 ${px(r[4])}<br>量 ${fmtVol(r[5])}  额 ${fmtVol(r[6])}`;
+    }},
+    dataZoom:[{type:'inside', start:0, end:100}],
+    xAxis:{type:'category', data:dates, axisLine:{lineStyle:{color:C.baseline}},
+           axisTick:{show:false}, axisLabel:{color:C.muted, fontSize:11, formatter:d=>d.slice(5)}},
+    yAxis:yBase(),
+    series:[{type:'candlestick', data:D.kline.map(r=>[r[1],r[2],r[3],r[4]]),
+      // 阳线空心红 / 阴线实心绿: 形状+颜色双编码
+      itemStyle:{color:'transparent', color0:C.down, borderColor:C.up, borderColor0:C.down}}],
+  });
+  mK.on('click', p=>{ if(p.componentType==='series') showDay(dates[p.dataIndex]); });
+}
+
+function showDay(date){
+  const d = D.intraday[date];
+  if(!d) return;
+  const i = D.kline.findIndex(r=>r[0]===date);
+  const prevClose = i>0 ? D.kline[i-1][2] : D.kline[i][1];
+  let cv=0, cvv=0;
+  const avg = d.c.map((c,j)=>{ cv+=c*d.v[j]; cvv+=d.v[j]; return +(cv/(cvv||1)).toFixed(3); });
+  $('#ititle').innerHTML = `分时 · ${date}`;
+  // 围绕昨收对称定界, 右轴 = 左轴同刻度换算涨跌幅%, 零位即昨收
+  const dev = Math.max(...d.c.concat(avg).map(v=>Math.abs(v-prevClose))) || prevClose*0.01;
+  const p = dev/prevClose*100;
+  mI.setOption({
+    yAxis:[{min:prevClose-dev, max:prevClose+dev, interval:dev/3,
+            axisLabel:{color:C.muted, fontSize:11, formatter:v=>v.toFixed(3)}},
+           {min:-p, max:p, interval:p/3}],
+    tooltip:{...tip, formatter:ps=>{
+      const j = ps[0].dataIndex;
+      return `${date} ${d.t[j]}<br>现价 <b>${px(d.c[j])}</b> (${pct(d.c[j],prevClose)})<br>`+
+        `均价 ${px(avg[j])}<br>量 ${fmtVol(d.v[j])}`;
+    }},
+    xAxis:{data:d.t},
+    series:[{data:d.c,
+             // 午间分隔线
+             markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline, width:1},
+                       data:[{xAxis:'11:30'}], label:{show:false}}},
+            {data:avg},
+            {markLine:{silent:true, symbol:'none',
+                       lineStyle:{color:C.muted, type:'dashed', width:1.5, opacity:.9},
+                       data:[{yAxis:prevClose}], label:{show:false}}}],
+  }, {replaceMerge:[]});
+}
+
+function buildIntraday(){
+  mI = echarts.init($('#intraday'), null, {renderer:'canvas'});
+  mI.setOption({
+    grid:{left:56, right:56, top:20, bottom:28},
+    tooltip:tip,
+    xAxis:{type:'category', boundaryGap:false, axisLine:{lineStyle:{color:C.baseline}},
+           axisTick:{show:false},
+           // 只标 09:30 / 11:30 / 15:00 (首根 bar 是 09:31, 显示为 09:30)
+           axisLabel:{color:C.muted, fontSize:11,
+                      interval:(i,v)=>['09:31','11:30','15:00'].includes(v),
+                      formatter:v=>v==='09:31'?'09:30':v}},
+    yAxis:[{...yBase(), axisPointer:{label:{formatter:p=>p.value.toFixed(3)}}},
+      {type:'value', position:'right', splitLine:{show:false}, axisPointer:{show:false},
+       axisLine:{show:false}, axisTick:{show:false},
+       axisLabel:{fontSize:11,
+                  formatter:v=>{if(Math.abs(v)<0.005)v=0; return (v>0?'+':'')+v.toFixed(2)+'%';},
+                  color:v=>v>0.005?C.up:v<-0.005?C.down:C.muted}}],
+    series:[
+      {name:'现价', type:'line', showSymbol:false, lineStyle:{width:2, color:C.blue},
+       areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,
+         [{offset:0,color:'rgba(57,135,229,.25)'},{offset:1,color:'rgba(57,135,229,0)'}])}},
+      {name:'均价', type:'line', showSymbol:false, lineStyle:{width:1.5, color:C.avg}},
+      {name:'昨收', type:'line', data:[]},
+    ],
+  });
+}
+
+if(!D || !D.kline.length){
+  $('.wrap').innerHTML = '<div class="miss">未找到 <code>etf_data.js</code>。先运行 '+
+    '<code>python intraday_cache.py</code> 生成数据。</div>';
+} else {
+  $('#updated').textContent = '更新于 '+D.updated;
+  buildKline();
+  buildIntraday();
+  showDay(D.kline[D.kline.length-1][0]);
+}
+
+addEventListener('resize', ()=>{ mK?.resize(); mI?.resize(); });
+</script>
+</body>
+</html>
