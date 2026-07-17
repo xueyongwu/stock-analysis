@@ -137,6 +137,24 @@ def is_trading_day(day: str) -> bool:
     return bool(row) and row[1] == "1"
 
 
+def st_codes() -> set[str]:
+    """名称含 ST 的代码集合(其 ±5% 涨跌停与普通涨跌无法区分, 统计时剔除)。"""
+    import baostock as bs
+    lg = bs.login()
+    if lg.error_code != "0":
+        raise RuntimeError(f"baostock login failed: {lg.error_msg}")
+    try:
+        rs = bs.query_stock_basic()
+        out = set()
+        while rs.error_code == "0" and rs.next():
+            code, name = rs.get_row_data()[:2]
+            if "ST" in name.upper():
+                out.add(code)
+        return out
+    finally:
+        bs.logout()
+
+
 def export_data_js(df: pd.DataFrame, out: Path):
     """按日聚合 -> 写 data.js 供 index.html (ECharts) 读取。"""
     g = df.groupby("date")["pct"]
@@ -145,12 +163,28 @@ def export_data_js(df: pd.DataFrame, out: Path):
     up = df[df["pct"] > 0].groupby("date").size().reindex(med.index).fillna(0)
     cum = med.cumsum().round(3)                   # 累计中位数
 
+    ld = df[df["date"] == med.index[-1]]  # 最新交易日截面
+    # 涨跌停按板块阈值近似(科创68/创业30 ±19.9%, 其余 ±9.9%), ST 剔除; 拉名单失败则降级不剔
+    try:
+        lu = ld[~ld["code"].isin(st_codes())]
+    except Exception as e:
+        print(f"ST 名单拉取失败, 涨跌停统计未剔 ST: {e}", flush=True)
+        lu = ld
+    lim = lu["code"].str.startswith(("sh.68", "sz.30")).map({True: 19.9, False: 9.9})
+
     payload = {
         "dates": [d.strftime("%Y-%m-%d") for d in med.index],
         "median": med.tolist(),
         "cum": cum.tolist(),
         "count": n.astype(int).tolist(),
         "upRatio": (up / n * 100).round(1).tolist(),  # 上涨家数占比 %
+        "latest": {
+            "limitUp": int((lu["pct"] >= lim).sum()),
+            "limitDown": int((lu["pct"] <= -lim).sum()),
+            "up": int((ld["pct"] > 0).sum()),
+            "flat": int((ld["pct"] == 0).sum()),
+            "down": int((ld["pct"] < 0).sum()),
+        },
         "updated": pd.Timestamp.now(tz="Asia/Shanghai").strftime("%Y-%m-%d %H:%M"),
     }
     out.write_text("window.MEDIAN_DATA=" + json.dumps(payload, ensure_ascii=False) + ";\n",
