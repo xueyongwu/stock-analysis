@@ -46,6 +46,14 @@
   footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
   .miss{padding:40px; text-align:center; color:var(--muted)}
   code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
+  @media(max-width:680px){
+    .wrap{padding:20px 12px 40px}
+    h1{font-size:17px}
+    .tile{padding:12px}
+    .tile .v{font-size:19px}
+    .card{padding:12px 6px 6px}
+    #main{height:280px} #cum{height:200px} #idx{height:400px}
+  }
 </style>
 </head>
 <body>
@@ -99,8 +107,10 @@ function slice(){
           count:D.count.slice(s), upRatio:D.upRatio.slice(s)};
 }
 
+const MOBILE = matchMedia('(max-width:680px)').matches;
+const GL = MOBILE ? 42 : 52;  // 图表左边距, 窄屏收紧
 const tip = {
-  trigger:'axis', backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
+  trigger:'axis', confine:true, backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
   textStyle:{color:C.ink, fontSize:12},
   axisPointer:{type:'cross', lineStyle:{color:C.muted, type:'dashed'},
                crossStyle:{color:C.muted}, label:{backgroundColor:'#333'}},
@@ -117,7 +127,7 @@ const xBase = () => ({
 function buildCharts(){
   mMain = echarts.init($('#main'), null, {renderer:'canvas'});
   mMain.setOption({
-    grid:{left:52, right:20, top:24, bottom:36},
+    grid:{left:GL, right:MOBILE?12:20, top:24, bottom:36},
     tooltip:{...tip, formatter:p=>{
       const i=p[0].dataIndex;
       return `${V.dates[i]}<br>日中位数 <b>${fmt(V.median[i])}</b><br>`+
@@ -131,7 +141,7 @@ function buildCharts(){
   });
   mCum = echarts.init($('#cum'), null, {renderer:'canvas'});
   mCum.setOption({
-    grid:{left:52, right:20, top:20, bottom:28},
+    grid:{left:GL, right:MOBILE?12:20, top:20, bottom:28},
     tooltip:{...tip, formatter:p=>`${V.dates[p[0].dataIndex]}<br>累计 <b>${fmt(V.cum[p[0].dataIndex])}</b>`},
     xAxis:xBase(), yAxis:yBase(),
     series:[{type:'line', showSymbol:false, lineStyle:{width:2, color:C.blue},
@@ -177,21 +187,27 @@ if(!IX || !$('#idx')){  // 缺数据或 data.js 缺失时 wrap 已被替换
   const c = $('#idxCard'); if(c) c.style.display = 'none';
 } else {
   const items = [...IX.items].reverse();  // ECharts 类目轴自下而上, 反转让涨幅最大在顶
+  // 移动端: 柱长≥数据跨度20%(约一个标签宽)才放柱内, 短柱外置
+  const span = Math.max(0,...items.map(i=>i.ytd)) - Math.min(0,...items.map(i=>i.ytd));
+  const inside = v => MOBILE && Math.abs(v) >= .2*span;
   mIdx = echarts.init($('#idx'), null, {renderer:'canvas'});
   mIdx.setOption({
     grid:{left:8, right:8, top:6, bottom:24, containLabel:true},
-    tooltip:{trigger:'item', backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
+    tooltip:{trigger:'item', confine:true, backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
       textStyle:{color:C.ink, fontSize:12},
       formatter:p=>{const it=items[p.dataIndex];
         return `${it.name}<br>今年以来 <b>${fmt(it.ytd)}</b><br>收盘 ${it.close} · ${it.date}`;}},
-    xAxis:{type:'value', axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
+    xAxis:{type:'value', boundaryGap:MOBILE?['4%','4%']:[0,0],  // 仅移动端留白, PC 维持原状
+      axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
       splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
     yAxis:{type:'category', data:items.map(i=>i.name),
       axisLabel:{color:C.ink2, fontSize:12}, axisLine:{show:false}, axisTick:{show:false}},
     series:[{type:'bar', barMaxWidth:14,
       data:items.map(i=>({value:i.ytd,
-        label:{show:true, position:i.ytd>=0?'right':'left', color:C.ink2, fontSize:11,
-               formatter:()=>fmt(i.ytd)},
+        label:{show:true, fontSize:11, formatter:()=>fmt(i.ytd),
+               position:inside(i.ytd) ? (i.ytd>=0?'insideRight':'insideLeft')
+                                      : (i.ytd>=0?'right':'left'),
+               color:inside(i.ytd) ? '#fff' : C.ink2},
         itemStyle:{color:i.ytd>=0?C.up:C.down,
                    borderRadius:i.ytd>=0?[0,4,4,0]:[4,0,0,4]}})),
       markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},

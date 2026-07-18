@@ -40,6 +40,13 @@
   footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
   .miss{padding:40px; text-align:center; color:var(--muted)}
   code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
+  @media(max-width:680px){
+    .wrap{padding:20px 12px 40px}
+    h1{font-size:17px}
+    .card{padding:12px 6px 6px}
+    #kline{height:300px} #intraday{height:260px} #nq{height:200px}
+    #nqHero .v{font-size:28px}
+  }
 </style>
 </head>
 <body>
@@ -77,8 +84,10 @@ const $ = s => document.querySelector(s);
 const C = {up:'#e4534a', down:'#16b070', blue:'#3987e5', avg:'#d9a441', ink:'#fff',
            ink2:'#c3c2b7', muted:'#898781', grid:'#2c2c2a', baseline:'#383835'};
 
+const MOBILE = matchMedia('(max-width:680px)').matches;
+const GL = MOBILE ? 46 : 56;  // 图表左边距, 窄屏收紧
 const tip = {
-  trigger:'axis', backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
+  trigger:'axis', confine:true, backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
   textStyle:{color:C.ink, fontSize:12},
   axisPointer:{type:'cross', lineStyle:{color:C.muted, type:'dashed'},
                crossStyle:{color:C.muted}, label:{backgroundColor:'#333'}},
@@ -98,7 +107,7 @@ function buildKline(){
   const dates = D.kline.map(r=>r[0]);
   mK = echarts.init($('#kline'), null, {renderer:'canvas'});
   mK.setOption({
-    grid:{left:56, right:20, top:24, bottom:36},
+    grid:{left:GL, right:MOBILE?12:20, top:24, bottom:36},
     tooltip:{...tip, formatter:ps=>{
       const i = ps[0].dataIndex, r = D.kline[i];
       const prev = i>0 ? D.kline[i-1][2] : r[1];
@@ -151,7 +160,7 @@ function showDay(date){
 function buildIntraday(){
   mI = echarts.init($('#intraday'), null, {renderer:'canvas'});
   mI.setOption({
-    grid:{left:56, right:56, top:20, bottom:28},
+    grid:{left:GL, right:MOBILE?46:56, top:20, bottom:28},
     tooltip:tip,
     xAxis:{type:'category', boundaryGap:false, axisLine:{lineStyle:{color:C.baseline}},
            axisTick:{show:false},
@@ -198,7 +207,7 @@ if(!NQ || !NQ.items?.length || !$('#nq')){  // ETF 数据缺失时 wrap 已被�
     `<span class="u">${last.base} → ${last.open} · ${last.partial?`进行中, 截至 ${last.t}`:last.d}</span>`;
   mNq = echarts.init($('#nq'), null, {renderer:'canvas'});
   mNq.setOption({
-    grid:{left:52, right:20, top:20, bottom:28},
+    grid:{left:GL, right:MOBILE?12:20, top:20, bottom:28},
     tooltip:{...tip, formatter:p=>{const x=it[p[0].dataIndex];
       return `${x.d}<br>${x.partial?`隔夜(截至 ${x.t})`:'隔夜'} <b>${fmtP(x.pct)}</b><br>${x.base} → ${x.open}`;}},
     xAxis:{type:'category', data:it.map(x=>x.d), axisLine:{lineStyle:{color:C.baseline}},
