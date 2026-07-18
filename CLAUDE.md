@@ -27,4 +27,5 @@ open index.html                    # 看结果，无需服务器
 - **CI push 竞态**：workflow 里 push 前 `git pull --rebase`，改 workflow 时保留。
 - **cache/ 的 gitignore 特殊规则**：`cache/*` 被忽略但 `!cache/daily_pctchg.parquet` 和 `!cache/intraday_159696_1min.parquet` 例外（CI 增量依赖它们入库）。
 - **159696 分时累积**：`intraday_cache.py` 每日 CI 拉新浪 1min bar（固定最新 1970 根 ≈9 交易日），按 `day` 去重合并进 parquet，逐日累加突破 1970 根限制。新浪偶发失败时 `continue-on-error` 不阻断中位数更新。合并后导出 `etf_data.js`（日K聚合 + 每日分时，剔除不足 200 根的边界日），`etf.html` 静态渲染（点击K线看分时），CI 一并提交。
+- **指数 YTD 卡片**：`index_perf.py` 拉 13 个宽基/特色指数今年以来涨跌幅（新浪 `stock_zh_index_daily` 为主；中证2000 走中证官网 `stock_zh_index_hist_csindex`；微盘股 883418 / 可转债 883981 是同花顺自编指数，直连 `d.10jqka.com.cn/v4/line/bk_*` 接口带 ths.js 算的 v cookie）→ 导出 `idx_data.js`，`index.html` 排名条形图卡片渲染。CI `continue-on-error` 单独跑，失败用旧数据。
 - 只导出今年以来的数据（`main()` 末尾按 `%Y-01-01` 过滤）。

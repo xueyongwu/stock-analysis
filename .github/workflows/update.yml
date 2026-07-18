@@ -20,11 +20,13 @@ jobs:
       - run: python median_trend.py --update
       - run: python intraday_cache.py 159696
         continue-on-error: true  # 新浪接口偶发失败不阻断中位数更新
+      - run: python index_perf.py
+        continue-on-error: true  # 指数源(新浪/中证/同花顺)偶发失败不阻断, 页面用旧数据
       - name: commit & push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data.js etf_data.js cache/daily_pctchg.parquet cache/intraday_159696_1min.parquet
+          git add data.js etf_data.js idx_data.js cache/daily_pctchg.parquet cache/intraday_159696_1min.parquet
           git diff --cached --quiet || git commit -m "chore: daily data update $(date -u +%F)"
           git pull --rebase
           git push

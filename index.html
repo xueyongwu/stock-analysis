@@ -42,7 +42,7 @@
   }
   .card h2{font-size:14px; font-weight:600; margin:2px 6px 0; color:var(--ink2)}
   .card h2 span{color:var(--muted); font-weight:400; font-size:12px}
-  #main{height:360px} #cum{height:240px}
+  #main{height:360px} #cum{height:240px} #idx{height:440px}
   footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
   .miss{padding:40px; text-align:center; color:var(--muted)}
   code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
@@ -67,10 +67,16 @@
     <div id="cum"></div>
   </div>
 
+  <div class="card" id="idxCard">
+    <h2>宽基指数 · 今年以来涨跌幅 <span>· 基准为上年最后交易日收盘</span></h2>
+    <div id="idx"></div>
+  </div>
+
   <footer id="foot"></footer>
 </div>
 
 <script src="data.js"></script>
+<script src="idx_data.js"></script>
 <script>
 const D = window.MEDIAN_DATA;
 const $ = s => document.querySelector(s);
@@ -164,10 +170,39 @@ if(!D){
   applyRange();
 }
 
-addEventListener('resize', ()=>{ mMain?.resize(); mCum?.resize(); });
+// 宽基指数 YTD 排名条形图(数据独立于中位数管道, 缺 idx_data.js 则隐藏卡片)
+let mIdx;
+const IX = window.INDEX_YTD;
+if(!IX || !$('#idx')){  // 缺数据或 data.js 缺失时 wrap 已被替换
+  const c = $('#idxCard'); if(c) c.style.display = 'none';
+} else {
+  const items = [...IX.items].reverse();  // ECharts 类目轴自下而上, 反转让涨幅最大在顶
+  mIdx = echarts.init($('#idx'), null, {renderer:'canvas'});
+  mIdx.setOption({
+    grid:{left:8, right:8, top:6, bottom:24, containLabel:true},
+    tooltip:{trigger:'item', backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
+      textStyle:{color:C.ink, fontSize:12},
+      formatter:p=>{const it=items[p.dataIndex];
+        return `${it.name}<br>今年以来 <b>${fmt(it.ytd)}</b><br>收盘 ${it.close} · ${it.date}`;}},
+    xAxis:{type:'value', axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
+      splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
+    yAxis:{type:'category', data:items.map(i=>i.name),
+      axisLabel:{color:C.ink2, fontSize:12}, axisLine:{show:false}, axisTick:{show:false}},
+    series:[{type:'bar', barMaxWidth:14,
+      data:items.map(i=>({value:i.ytd,
+        label:{show:true, position:i.ytd>=0?'right':'left', color:C.ink2, fontSize:11,
+               formatter:()=>fmt(i.ytd)},
+        itemStyle:{color:i.ytd>=0?C.up:C.down,
+                   borderRadius:i.ytd>=0?[0,4,4,0]:[4,0,0,4]}})),
+      markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},
+        data:[{xAxis:0}], label:{show:false}}}],
+  });
+}
+
+addEventListener('resize', ()=>{ mMain?.resize(); mCum?.resize(); mIdx?.resize(); });
 
 $('#foot').innerHTML =
-  '数据源：baostock(日线) · 免费无需 token。'+
+  '数据源：baostock(日线)；指数：新浪 / 中证指数 / 同花顺 · 免费无需 token。'+
   '<br>中位数 = 全市场当日涨跌幅排序取中，剔除停牌；抗极端值，反映"多数个股"的真实涨跌，不受权重股绑架。';
 </script>
 </body>
