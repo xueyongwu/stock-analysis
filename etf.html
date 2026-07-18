@@ -30,7 +30,13 @@
   }
   .card h2{font-size:14px; font-weight:600; margin:2px 6px 0; color:var(--ink2)}
   .card h2 span{color:var(--muted); font-weight:400; font-size:12px}
-  #kline{height:380px} #intraday{height:300px}
+  #kline{height:380px} #intraday{height:300px} #nq{height:240px}
+  .pos{color:var(--up)} .neg{color:var(--down)}
+  #nqCard h2{display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:4px 12px}
+  #nqCard h2 .t{color:var(--ink2); font-size:14px; font-weight:600}
+  #nqHero{display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; margin:12px 6px 0}
+  #nqHero .v{font-size:34px; font-weight:650; font-variant-numeric:tabular-nums; line-height:1}
+  #nqHero .u{color:var(--muted); font-size:12px}
   footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
   .miss{padding:40px; text-align:center; color:var(--muted)}
   code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
@@ -43,6 +49,13 @@
     <div class="sub"><a href="index.html">← 中位数看板</a> · <span id="updated"></span></div>
   </header>
 
+  <div class="card" id="nqCard">
+    <h2><span class="t">纳指期货 · 隔夜涨跌</span>
+        <span>北京时间 前一交易日15:00 → 当日9:30 · NQ主连 · 新浪外盘 · 延迟约10分钟</span></h2>
+    <div id="nqHero"></div>
+    <div id="nq"></div>
+  </div>
+
   <div class="card">
     <h2>日K <span>· 点击K线看当日分时</span></h2>
     <div id="kline"></div>
@@ -53,10 +66,11 @@
     <div id="intraday"></div>
   </div>
 
-  <footer>数据源：新浪 1min bar，每日增量累积。历史深度从首拉日起逐日增长。</footer>
+  <footer>数据源：新浪 1min bar / 新浪外盘期货分时(延迟约10分钟)，每日增量累积。历史深度从首拉日起逐日增长。</footer>
 </div>
 
 <script src="etf_data.js"></script>
+<script src="nq_data.js"></script>
 <script>
 const D = window.ETF_DATA;
 const $ = s => document.querySelector(s);
@@ -171,7 +185,35 @@ if(!D || !D.kline.length){
   showDay(D.kline[D.kline.length-1][0]);
 }
 
-addEventListener('resize', ()=>{ mK?.resize(); mI?.resize(); });
+// 纳指期货隔夜涨跌柱状图(数据独立累积, 缺 nq_data.js 或尚无点位则隐藏卡片)
+let mNq;
+const NQ = window.NQ_OVERNIGHT;
+const fmtP = v => (v>=0?'+':'')+v.toFixed(2)+'%';
+if(!NQ || !NQ.items?.length || !$('#nq')){  // ETF 数据缺失时 wrap 已被替换, #nq 不存在
+  const c = $('#nqCard'); if(c) c.style.display = 'none';
+} else {
+  const it = NQ.items, last = it[it.length-1];
+  $('#nqHero').innerHTML =
+    `<span class="v ${last.pct>=0?'pos':'neg'}">${fmtP(last.pct)}</span>`+
+    `<span class="u">${last.base} → ${last.open} · ${last.partial?`进行中, 截至 ${last.t}`:last.d}</span>`;
+  mNq = echarts.init($('#nq'), null, {renderer:'canvas'});
+  mNq.setOption({
+    grid:{left:52, right:20, top:20, bottom:28},
+    tooltip:{...tip, formatter:p=>{const x=it[p[0].dataIndex];
+      return `${x.d}<br>${x.partial?`隔夜(截至 ${x.t})`:'隔夜'} <b>${fmtP(x.pct)}</b><br>${x.base} → ${x.open}`;}},
+    xAxis:{type:'category', data:it.map(x=>x.d), axisLine:{lineStyle:{color:C.baseline}},
+           axisTick:{show:false}, axisLabel:{color:C.muted, fontSize:11, formatter:d=>d.slice(5)}},
+    yAxis:{type:'value', axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
+           splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
+    series:[{type:'bar', barMaxWidth:10,
+      data:it.map(x=>({value:x.pct,
+        itemStyle:{color:x.pct>=0?C.up:C.down, opacity:x.partial?.45:1, borderRadius:1}})),
+      markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},
+        data:[{yAxis:0}], label:{show:false}}}],
+  });
+}
+
+addEventListener('resize', ()=>{ mK?.resize(); mI?.resize(); mNq?.resize(); });
 </script>
 </body>
 </html>
