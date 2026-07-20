@@ -37,6 +37,12 @@
   #nqHero{display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; margin:12px 6px 0}
   #nqHero .v{font-size:34px; font-weight:650; font-variant-numeric:tabular-nums; line-height:1}
   #nqHero .u{color:var(--muted); font-size:12px}
+  #nqReload{display:inline-flex; align-items:center; justify-content:center; color:var(--muted);
+    background:none; border:none; padding:3px; margin-left:2px; cursor:pointer; vertical-align:middle}
+  #nqReload:hover{color:var(--ink2)}
+  #nqReload:disabled{cursor:default}
+  #nqReload.spin svg{animation:nqspin .8s linear infinite}
+  @keyframes nqspin{to{transform:rotate(360deg)}}
   footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
   .miss{padding:40px; text-align:center; color:var(--muted)}
   code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
@@ -57,7 +63,7 @@
   </header>
 
   <div class="card" id="nqCard">
-    <h2><span class="t">纳指期货 · 隔夜涨跌</span>
+    <h2><span class="t">纳指期货 · 隔夜涨跌 <button id="nqReload" title="刷新" aria-label="刷新" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></span>
         <span>北京时间 前一交易日15:00 → 当日9:30 · NQ主连 · 新浪外盘 · 延迟约10分钟</span></h2>
     <div id="nqHero"></div>
     <div id="nq"></div>
@@ -202,24 +208,51 @@ if(!NQ || !NQ.items?.length || !$('#nq')){  // ETF 数据缺失时 wrap 已被�
   const c = $('#nqCard'); if(c) c.style.display = 'none';
 } else {
   const it = NQ.items, last = it[it.length-1];
-  $('#nqHero').innerHTML =
-    `<span class="v ${last.pct>=0?'pos':'neg'}">${fmtP(last.pct)}</span>`+
-    `<span class="u">${last.base} → ${last.open} · ${last.partial?`进行中, 截至 ${last.t}`:last.d}</span>`;
   mNq = echarts.init($('#nq'), null, {renderer:'canvas'});
-  mNq.setOption({
-    grid:{left:GL, right:MOBILE?12:20, top:20, bottom:28},
-    tooltip:{...tip, formatter:p=>{const x=it[p[0].dataIndex];
-      return `${x.d}<br>${x.partial?`隔夜(截至 ${x.t})`:'隔夜'} <b>${fmtP(x.pct)}</b><br>${x.base} → ${x.open}`;}},
-    xAxis:{type:'category', data:it.map(x=>x.d), axisLine:{lineStyle:{color:C.baseline}},
-           axisTick:{show:false}, axisLabel:{color:C.muted, fontSize:11, formatter:d=>d.slice(5)}},
-    yAxis:{type:'value', axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
-           splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
-    series:[{type:'bar', barMaxWidth:10,
-      data:it.map(x=>({value:x.pct,
-        itemStyle:{color:x.pct>=0?C.up:C.down, opacity:x.partial?.45:1, borderRadius:1}})),
-      markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},
-        data:[{yAxis:0}], label:{show:false}}}],
-  });
+  const renderNq = () => {
+    $('#nqHero').innerHTML =
+      `<span class="v ${last.pct>=0?'pos':'neg'}">${fmtP(last.pct)}</span>`+
+      `<span class="u">${last.base} → ${last.open} · ${last.partial?`进行中, 截至 ${last.t}`:last.d}</span>`;
+    mNq.setOption({
+      grid:{left:GL, right:MOBILE?12:20, top:20, bottom:28},
+      tooltip:{...tip, formatter:p=>{const x=it[p[0].dataIndex];
+        return `${x.d}<br>${x.partial?`隔夜(截至 ${x.t})`:'隔夜'} <b>${fmtP(x.pct)}</b><br>${x.base} → ${x.open}`;}},
+      xAxis:{type:'category', data:it.map(x=>x.d), axisLine:{lineStyle:{color:C.baseline}},
+             axisTick:{show:false}, axisLabel:{color:C.muted, fontSize:11, formatter:d=>d.slice(5)}},
+      yAxis:{type:'value', axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
+             splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
+      series:[{type:'bar', barMaxWidth:10,
+        data:it.map(x=>({value:x.pct,
+          itemStyle:{color:x.pct>=0?C.up:C.down, opacity:x.partial?.45:1, borderRadius:1}})),
+        markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},
+          data:[{yAxis:0}], label:{show:false}}}],
+    });
+  };
+  renderNq();
+  // 「进行中」半程点手动刷新: base 固定, 点按钮拉新浪最新 NQ 价重算 pct。
+  // <script> 注入绕 CORS(该接口无 CORS 头但可当 JSONP 加载, 顶层 var t 落全局 window.t)。
+  if(last.partial){
+    const NQ_URL='https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20t=/GlobalFuturesService.getGlobalFuturesMinLine?symbol=NQ';
+    const btn=$('#nqReload'); btn.hidden=false;
+    const nqRefresh=()=>{
+      btn.disabled=true; btn.classList.add('spin');
+      const done=()=>{ s.remove(); btn.disabled=false; btn.classList.remove('spin'); };
+      const s=document.createElement('script');
+      s.src=NQ_URL+'&_='+Date.now();
+      s.onload=()=>{ done();
+        try{ const r=window.t.minLine_1d, b=r[r.length-1];  // ponytail: 全局 t 名通用, 页面无同名冲突
+          last.open=+(+b[b.length-5]).toFixed(2);
+          last.pct=+((+b[b.length-5]/last.base-1)*100).toFixed(2)+0;
+          last.t=b[b.length-1].slice(5,16);  // "2026-07-20 11:35:00" -> "07-20 11:35"
+          renderNq();
+        }catch(e){}
+      };
+      s.onerror=done;
+      document.head.appendChild(s);
+    };
+    btn.onclick=nqRefresh;
+    nqRefresh();  // 开页自动刷一次, 之后手动
+  }
 }
 
 addEventListener('resize', ()=>{ mK?.resize(); mI?.resize(); mNq?.resize(); });
