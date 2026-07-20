@@ -1,1 +1,1 @@
-window.NQ_OVERNIGHT={"updated": "2026-07-20 11:06", "items": [{"d": "2026-07-20", "t": "07-20 11:05", "pct": 0.52, "base": 28736.67, "open": 28886.45, "partial": true}]};
+window.NQ_OVERNIGHT={"updated": "2026-07-20 23:19", "items": [{"d": "2026-07-20", "pct": 0.24, "base": 28736.67, "open": 28805.83}, {"d": "2026-07-20", "t": "07-20 23:18", "pct": 0.72, "base": 28802.98, "open": 29009.36, "partial": true}]};
