@@ -46,20 +46,40 @@ def overnight(bars: pd.DataFrame, tdays: list[pd.Timestamp]) -> list[dict]:
         if pd.isna(base) or opens.empty:  # 缓存未覆盖 或 当日晨CME无盘
             continue
         o = float(opens.iloc[-1])
-        items.append({"d": d.strftime("%Y-%m-%d"),
+        items.append({"d": d.strftime("%Y-%m-%d"), "_prev": prev,
+                      "_end": d + pd.Timedelta(hours=9, minutes=30),
                       "pct": round((o / base - 1) * 100, 2) + 0,  # +0 归一化 -0.0
                       "base": round(float(base), 2), "open": round(o, 2)})
 
-    # 半程点: 最后一个交易日15:00 -> 最新bar, 下一交易日9:30后被完整点替代
-    base = s.asof(tdays[-1] + pd.Timedelta(hours=15))
-    tail = s[s.index > tdays[-1] + pd.Timedelta(hours=15)]
+    # 半程点: 上一A股收盘15:00 -> 最新bar, 下一交易日9:30后被完整点替代
+    cut = tdays[-1] + pd.Timedelta(hours=15)
+    # 滚动: daily_pctchg 未含当日(收盘后~17:30才出), 但 NQ 已越过更晚的A股收盘;
+    # 取已越过的最近工作日15:00(其后仍有bar)为新周期基准, 15:00即换窗不等CI。
+    crossed = [ts for ts in s.index
+               if ts > cut and ts.hour == 15 and ts.minute == 0 and ts.weekday() < 5]
+    if crossed and s.index[-1] > crossed[-1]:
+        cut = crossed[-1]
+    base = s.asof(cut)
+    tail = s[s.index > cut]
     if not pd.isna(base) and not tail.empty:
         o = float(tail.iloc[-1])
         items.append({"d": tail.index[-1].strftime("%Y-%m-%d"),
-                      "t": tail.index[-1].strftime("%m-%d %H:%M"),
+                      "t": tail.index[-1].strftime("%Y-%m-%d %H:%M"),
+                      "_prev": cut - pd.Timedelta(hours=15), "_end": tail.index[-1],
                       "pct": round((o / base - 1) * 100, 2) + 0,  # +0 归一化 -0.0
                       "base": round(float(base), 2), "open": round(o, 2),
                       "partial": True})
+
+    # 最新窗口分时: 上一A股收盘(15:00)=0 到 窗口末尾, 供 etf.html 隔夜分时图
+    if items:
+        it = items[-1]
+        b0, start, end = it["base"], it["_prev"] + pd.Timedelta(hours=15), it["_end"]
+        seg = s[(s.index > start) & (s.index <= end)]
+        it["path"] = [[it["_prev"].strftime("%m-%d ") + "15:00", 0.0]] + \
+            [[t.strftime("%m-%d %H:%M"), round((p / b0 - 1) * 100, 2) + 0]
+             for t, p in seg.items()]
+    for it in items:
+        it.pop("_prev", None); it.pop("_end", None)
     return items
 
 

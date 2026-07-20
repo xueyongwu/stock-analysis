@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>159696 纳指ETF · 日K与分时</title>
+<title>159696 · 数据看板</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💹</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
@@ -30,19 +30,13 @@
   }
   .card h2{font-size:14px; font-weight:600; margin:2px 6px 0; color:var(--ink2)}
   .card h2 span{color:var(--muted); font-weight:400; font-size:12px}
-  #kline{height:380px} #intraday{height:300px} #nq{height:240px}
+  #kline{height:380px} #intraday{height:300px} #nqIntraday{height:300px}
   .pos{color:var(--up)} .neg{color:var(--down)}
   #nqCard h2{display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:4px 12px}
   #nqCard h2 .t{color:var(--ink2); font-size:14px; font-weight:600}
-  #nqHero{display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; margin:12px 6px 0}
-  #nqHero .v{font-size:34px; font-weight:650; font-variant-numeric:tabular-nums; line-height:1}
-  #nqHero .u{color:var(--muted); font-size:12px}
-  .reload{display:inline-flex; align-items:center; justify-content:center; color:var(--muted);
-    background:none; border:none; padding:3px; margin-left:2px; cursor:pointer; vertical-align:middle}
-  .reload:hover{color:var(--ink2)}
-  .reload:disabled{cursor:default}
-  .reload.spin svg{animation:nqspin .8s linear infinite}
-  @keyframes nqspin{to{transform:rotate(360deg)}}
+  #nqHero, #iHero{display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; margin:12px 6px 0}
+  #nqHero .v, #iHero .v{font-size:34px; font-weight:650; font-variant-numeric:tabular-nums; line-height:1}
+  #nqHero .u, #iHero .u{color:var(--muted); font-size:12px}
   footer{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.7}
   .miss{padding:40px; text-align:center; color:var(--muted)}
   code{background:#000; padding:2px 6px; border-radius:5px; color:var(--ink2)}
@@ -50,7 +44,7 @@
     .wrap{padding:20px 12px 40px}
     h1{font-size:17px}
     .card{padding:12px 6px 6px}
-    #kline{height:300px} #intraday{height:260px} #nq{height:200px}
+    #kline{height:300px} #intraday{height:260px} #nqIntraday{height:260px}
     #nqHero .v{font-size:28px}
   }
 </style>
@@ -58,28 +52,29 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>159696 纳指ETF易方达 · 日K与分时</h1>
-    <div class="sub"><a href="index.html">← 中位数看板</a> · <span id="updated"></span></div>
+    <h1>159696 纳指ETF易方达 · 数据看板</h1>
+    <div class="sub"><a href="index.html">← A股全市场 · 数据看板</a></div>
   </header>
 
   <div class="card" id="nqCard">
-    <h2><span class="t">纳指期货 · 隔夜涨跌 <button id="nqReload" class="reload" title="刷新" aria-label="刷新" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></span>
-        <span>北京时间 前一交易日15:00 → 当日9:30 · NQ主连 · 新浪外盘 · 延迟约10分钟</span></h2>
+    <h2><span class="t">纳指期货 · 隔夜涨跌</span></h2>
     <div id="nqHero"></div>
-    <div id="nq"></div>
+    <h2>分时</h2>
+    <div id="nqIntraday"></div>
   </div>
 
   <div class="card">
+    <div id="iHero"><span class="v" id="iChg"></span><span class="u" id="updated"></span></div>
     <h2 id="ititle">分时</h2>
     <div id="intraday"></div>
   </div>
 
   <div class="card">
-    <h2>日K <span>· 点击K线看当日分时</span> <button id="etfReload" class="reload" title="刷新实时" aria-label="刷新实时" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></h2>
+    <h2>日K <span>· 点击K线看当日分时</span></h2>
     <div id="kline"></div>
   </div>
 
-  <footer>数据源：新浪 1min bar / 新浪外盘期货分时(延迟约10分钟)，每日增量累积。历史深度从首拉日起逐日增长。</footer>
+  <footer>数据源：新浪 1min bar + 腾讯逐笔快照(ETF 实时价) / 新浪外盘期货分时(延迟约1分钟)，每日增量累积。历史深度从首拉日起逐日增长。</footer>
 </div>
 
 <script src="etf_data.js"></script>
@@ -117,8 +112,14 @@ const FULLT=(()=>{const a=[];let[h,m]=[9,31];
 
 function buildKline(){
   const dates = D.kline.map(r=>r[0]);
-  if(mK) mK.dispose();  // 实时刷新会追加今日K后重建
-  mK = echarts.init($('#kline'), null, {renderer:'canvas'});
+  if(!mK){  // 只 init 一次, 后续 setOption 合并更新, 不 dispose (消闪)
+    mK = echarts.init($('#kline'), null, {renderer:'canvas'});
+    mK.on('click', p=>{ if(p.componentType!=='series') return;
+      const cd=D.kline[p.dataIndex][0];
+      pinned = cd !== D.kline[D.kline.length-1][0];  // 点非最新日=固定看历史; 点最新日=跟随实时
+      showDay(cd);
+    });
+  }
   mK.setOption({
     grid:{left:GL, right:MOBILE?12:20, top:24, bottom:36},
     tooltip:{...tip, formatter:ps=>{
@@ -135,9 +136,9 @@ function buildKline(){
       // 阳线空心红 / 阴线实心绿: 形状+颜色双编码
       itemStyle:{color:'transparent', color0:C.down, borderColor:C.up, borderColor0:C.down}}],
   });
-  mK.on('click', p=>{ if(p.componentType==='series') showDay(dates[p.dataIndex]); });
 }
 
+let pinned = false;  // 用户点历史K后固定, 实时轮询不再抢回最新日
 function showDay(date){
   const d = D.intraday[date];
   if(!d) return;
@@ -145,7 +146,15 @@ function showDay(date){
   const prevClose = i>0 ? D.kline[i-1][2] : D.kline[i][1];
   let cv=0, cvv=0;
   const avg = d.c.map((c,j)=>{ cv+=c*d.v[j]; cvv+=d.v[j]; return +(cv/(cvv||1)).toFixed(3); });
-  $('#ititle').innerHTML = `分时 · ${date}`;
+  // 最新K的分时: 标题"分时" + hero行(大涨跌幅 + 更新于, 同纳指卡片); 历史K: 标题带日期, 隐藏 hero
+  const isLatest = date === D.kline[D.kline.length-1][0];
+  const last = d.c[d.c.length-1], chg = (last/prevClose-1)*100;
+  $('#ititle').textContent = isLatest ? '分时' : `分时 · ${date}`;
+  $('#iHero').style.display = isLatest ? 'flex' : 'none';
+  if(isLatest){
+    $('#iChg').textContent = (chg>=0?'+':'')+chg.toFixed(2)+'%';
+    $('#iChg').style.color = `var(--${chg>=0?'up':'down'})`;
+  } else $('#updated').textContent = '';
   // 围绕昨收对称定界, 右轴 = 左轴同刻度换算涨跌幅%, 零位即昨收
   const dev = Math.max(...d.c.concat(avg).map(v=>Math.abs(v-prevClose))) || prevClose*0.01;
   const p = dev/prevClose*100;
@@ -201,8 +210,7 @@ function buildIntraday(){
 // 同 NQ: <script> 注入绕 CORS, var e= 落 window.e (该接口无防盗链)。
 const ETF_URL='https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20e=/CN_MarketDataService.getKLineData?symbol=sz159696&scale=1&ma=no&datalen=240';
 function liveETF(){
-  const btn=$('#etfReload'); btn.disabled=true; btn.classList.add('spin');
-  const done=()=>{ s.remove(); btn.disabled=false; btn.classList.remove('spin'); };
+  const done=()=>s.remove();
   const s=document.createElement('script');
   s.src=ETF_URL+'&_='+Date.now();
   s.onload=()=>{ done();
@@ -220,11 +228,34 @@ function liveETF(){
       const i=D.kline.findIndex(r=>r[0]===day);
       if(i<0) D.kline.push(row); else D.kline[i]=row;  // 今日尚无(CI 未跑)则追加, 否则原地更新
       D.intraday[day]={t,c,v};
-      buildKline(); showDay(day);
-      $('#updated').textContent='更新于 '+raw[raw.length-1].day.slice(0,16)+' (实时)';
+      buildKline();
+      if(!pinned){ showDay(day); $('#updated').textContent='更新于 '+raw[raw.length-1].day.slice(0,16); }
     }catch(err){}
   };
   s.onerror=done;
+  document.head.appendChild(s);
+}
+
+// 逐笔快照: 腾讯 qt (无防盗链), 落全局 v_sz159696。1min bar 建线, 这里每几秒推当前价。
+// 只更新今日 K 柱收/高/低 + 分时最后一点; 今日尚未由 1min 轮询建立则跳过。
+const SNAP_URL='https://qt.gtimg.cn/q=sz159696';
+function snapTick(){
+  const s=document.createElement('script');
+  s.src=SNAP_URL+'&_='+Date.now();
+  s.onload=()=>{ s.remove();
+    try{
+      const f=(window.v_sz159696||'').split('~'); if(f.length<35) return;
+      const day=`${f[30].slice(0,4)}-${f[30].slice(4,6)}-${f[30].slice(6,8)}`;
+      const k=D.kline, r=k[k.length-1];
+      if(!r||r[0]!==day) return;  // 等 1min 轮询先建今日柱
+      const price=+(+f[3]).toFixed(3);
+      r[2]=price; r[4]=+(+f[33]).toFixed(3); r[3]=+(+f[34]).toFixed(3);  // 收/高/低 权威
+      const d=D.intraday[day]; if(d&&d.c.length) d.c[d.c.length-1]=price;
+      buildKline();
+      if(!pinned){ showDay(day); $('#updated').textContent=`更新于 ${day} ${f[30].slice(8,10)}:${f[30].slice(10,12)}:${f[30].slice(12,14)}`; }
+    }catch(err){}
+  };
+  s.onerror=()=>s.remove();
   document.head.appendChild(s);
 }
 
@@ -236,68 +267,113 @@ if(!D || !D.kline.length){
   buildKline();
   buildIntraday();
   showDay(D.kline[D.kline.length-1][0]);
-  const eb=$('#etfReload'); eb.hidden=false; eb.onclick=liveETF;
-  liveETF();  // 开页自动拉一次实时
-  setInterval(liveETF, 60000);  // 每分钟自动轮询 (盘外返回旧 bar, 无害)
+  liveETF();  // 开页自动拉一次实时 1min bar (建线)
+  setInterval(liveETF, 60000);  // 每分钟补线
+  snapTick();
+  setInterval(snapTick, 8000);  // 逐笔快照, 每 8s 推当前价
 }
 
 // 纳指期货隔夜涨跌柱状图(数据独立累积, 缺 nq_data.js 或尚无点位则隐藏卡片)
-let mNq;
+let mNqI;
+
+// NQ 隔夜分时: 上一A股收盘(15:00)=0 到目前的涨跌幅走势。
+// 静态 path (nq_data.js, 上一收盘→缓存末) + 进行中时叠加实时 minLine tail(今06:00→now, 按 base 换算 pct)。
+// 固定框: 上一A股收盘(startLbl "MM-DD 15:00") -> 下一交易日15:00 的逐分钟类目槽。
+// 周末NQ闭市不占位(避免空白); 节假日按工作日近似(CI收盘后校正)。
+const NQ_YR = +((window.NQ_OVERNIGHT?.updated)||'').slice(0,4) || new Date().getFullYear();
+function nqFrame(startLbl){
+  const s=new Date(NQ_YR, +startLbl.slice(0,2)-1, +startLbl.slice(3,5), 15, 0);
+  const e=new Date(s);
+  do{ e.setDate(e.getDate()+1); }while(e.getDay()%6===0);  // 下一工作日
+  e.setHours(15,0,0,0);
+  const out=[], p2=n=>String(n).padStart(2,'0');
+  for(let t=new Date(s); t<=e; t.setMinutes(t.getMinutes()+1)){
+    if(t.getDay()%6===0) continue;  // 周六日闭市, 不占位
+    out.push(`${p2(t.getMonth()+1)}-${p2(t.getDate())} ${p2(t.getHours())}:${p2(t.getMinutes())}`);
+  }
+  return out;
+}
+function buildNqIntraday(){
+  mNqI = echarts.init($('#nqIntraday'), null, {renderer:'canvas'});
+  mNqI.setOption({
+    grid:{left:GL, right:MOBILE?12:20, top:20, bottom:28},
+    tooltip:tip,
+    xAxis:{type:'category', boundaryGap:false, axisLine:{lineStyle:{color:C.baseline}},
+           axisTick:{show:false},
+           axisLabel:{color:C.muted, fontSize:11, formatter:v=>v.slice(-5),  // 只显 HH:MM
+                      interval:(i,v)=>/:00$/.test(v) && +v.slice(-5,-3)%3===0}},  // 每3小时标
+    yAxis:{...yBase(), axisLabel:{color:C.muted, fontSize:11,
+             formatter:v=>{if(Math.abs(v)<0.005)v=0; return (v>0?'+':'')+v.toFixed(2)+'%';}},
+           axisPointer:{label:{formatter:o=>(o.value>0?'+':'')+o.value.toFixed(2)+'%'}}},
+    series:[{name:'涨跌', type:'line', showSymbol:false, connectNulls:false,
+      lineStyle:{width:2, color:C.blue},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,
+        [{offset:0,color:'rgba(57,135,229,.25)'},{offset:1,color:'rgba(57,135,229,0)'}])},
+      markLine:{silent:true, symbol:'none', lineStyle:{color:C.muted, type:'dashed', width:1.5, opacity:.9},
+        data:[{yAxis:0}], label:{show:false}}}],
+  });
+}
+function renderNqIntraday(item, live){
+  if(!mNqI || !item.path || !item.path.length) return;
+  const base=item.base;
+  // 数据 label->pct 映射: 静态 path + 进行中实时 tail(fresher 覆盖, 按 base 换算)
+  const m=new Map();
+  for(const [l,v] of item.path) m.set(l, v);
+  if(item.partial && live && live.length)
+    for(const b of live) m.set(b[b.length-1].slice(5,16), +((+b[b.length-5]/base-1)*100).toFixed(2)+0);
+  // 固定框 15:00->次收盘15:00, 数据填入, 空槽 null(右侧留空)
+  const t=nqFrame(item.path[0][0]);
+  const c=t.map(l=>m.has(l)?m.get(l):null);
+  // 同 ETF 分时: 围绕基准(0=上一A股收盘)对称定界, 3等分
+  const dev = Math.max(...c.filter(v=>v!=null).map(Math.abs)) || 1;
+  mNqI.setOption({
+    yAxis:{min:-dev, max:dev, interval:dev/3},
+    tooltip:{...tip, formatter:ps=>{const j=ps[0].dataIndex;
+      return c[j]==null ? t[j] : `${t[j]}<br>涨跌 <b>${(c[j]>=0?'+':'')+c[j].toFixed(2)}%</b>`;}},
+    xAxis:{data:t},
+    series:[{data:c}],
+  }, {replaceMerge:[]});
+}
 const NQ = window.NQ_OVERNIGHT;
 const fmtP = v => (v>=0?'+':'')+v.toFixed(2)+'%';
-if(!NQ || !NQ.items?.length || !$('#nq')){  // ETF 数据缺失时 wrap 已被替换, #nq 不存在
+if(!NQ || !NQ.items?.length || !$('#nqIntraday')){  // ETF 数据缺失时 wrap 已被替换, 卡片不存在
   const c = $('#nqCard'); if(c) c.style.display = 'none';
 } else {
   const it = NQ.items, last = it[it.length-1];
-  mNq = echarts.init($('#nq'), null, {renderer:'canvas'});
   const renderNq = () => {
     $('#nqHero').innerHTML =
       `<span class="v ${last.pct>=0?'pos':'neg'}">${fmtP(last.pct)}</span>`+
-      `<span class="u">${last.base} → ${last.open} · ${last.partial?`进行中, 截至 ${last.t}`:last.d}</span>`;
-    mNq.setOption({
-      grid:{left:GL, right:MOBILE?12:20, top:20, bottom:28},
-      tooltip:{...tip, formatter:p=>{const x=it[p[0].dataIndex];
-        return `${x.d}<br>${x.partial?`隔夜(截至 ${x.t})`:'隔夜'} <b>${fmtP(x.pct)}</b><br>${x.base} → ${x.open}`;}},
-      xAxis:{type:'category', data:it.map(x=>x.d), axisLine:{lineStyle:{color:C.baseline}},
-             axisTick:{show:false}, axisLabel:{color:C.muted, fontSize:11, formatter:d=>d.slice(5)}},
-      yAxis:{type:'value', axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
-             splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
-      series:[{type:'bar', barMaxWidth:10,
-        data:it.map(x=>({value:x.pct,
-          itemStyle:{color:x.pct>=0?C.up:C.down, opacity:x.partial?.45:1, borderRadius:1}})),
-        markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},
-          data:[{yAxis:0}], label:{show:false}}}],
-    });
+      `<span class="u">更新于 ${last.partial?last.t:last.d}</span>`;
   };
   renderNq();
-  // 「进行中」半程点手动刷新: base 固定, 点按钮拉新浪最新 NQ 价重算 pct。
+  buildNqIntraday();
+  renderNqIntraday(last);  // 静态 path 先出, 实时到再精修
+  // 拉 minLine_1d: 画当前盘分时(始终), 并在「进行中」时重算隔夜半程点 pct。
   // <script> 注入绕 CORS(该接口无 CORS 头但可当 JSONP 加载, 顶层 var t 落全局 window.t)。
-  if(last.partial){
-    const NQ_URL='https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20t=/GlobalFuturesService.getGlobalFuturesMinLine?symbol=NQ';
-    const btn=$('#nqReload'); btn.hidden=false;
-    const nqRefresh=()=>{
-      btn.disabled=true; btn.classList.add('spin');
-      const done=()=>{ s.remove(); btn.disabled=false; btn.classList.remove('spin'); };
-      const s=document.createElement('script');
-      s.src=NQ_URL+'&_='+Date.now();
-      s.onload=()=>{ done();
-        try{ const r=window.t.minLine_1d, b=r[r.length-1];  // ponytail: 全局 t 名通用, 页面无同名冲突
+  const NQ_URL='https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20t=/GlobalFuturesService.getGlobalFuturesMinLine?symbol=NQ';
+  const nqRefresh=()=>{
+    const done=()=>s.remove();
+    const s=document.createElement('script');
+    s.src=NQ_URL+'&_='+Date.now();
+    s.onload=()=>{ done();
+      try{ const r=window.t.minLine_1d;  // ponytail: 全局 t 名通用, 页面无同名冲突
+        renderNqIntraday(last, r);
+        if(last.partial){ const b=r[r.length-1];  // 半程点: base 固定, 只重算实时价
           last.open=+(+b[b.length-5]).toFixed(2);
           last.pct=+((+b[b.length-5]/last.base-1)*100).toFixed(2)+0;
-          last.t=b[b.length-1].slice(5,16);  // "2026-07-20 11:35:00" -> "07-20 11:35"
+          last.t=b[b.length-1].slice(0,16);  // "2026-07-20 11:35:00" -> "2026-07-20 11:35"
           renderNq();
-        }catch(e){}
-      };
-      s.onerror=done;
-      document.head.appendChild(s);
+        }
+      }catch(e){}
     };
-    btn.onclick=nqRefresh;
-    nqRefresh();  // 开页自动刷一次
-    setInterval(nqRefresh, 60000);  // 每分钟自动轮询
-  }
+    s.onerror=done;
+    document.head.appendChild(s);
+  };
+  nqRefresh();  // 开页自动刷一次
+  setInterval(nqRefresh, 8000);  // 同 ETF 逐笔快照节奏(数据源延迟约10分钟, 只是更快显现新bar)
 }
 
-addEventListener('resize', ()=>{ mK?.resize(); mI?.resize(); mNq?.resize(); });
+addEventListener('resize', ()=>{ mK?.resize(); mI?.resize(); mNqI?.resize(); });
 </script>
 </body>
 </html>
