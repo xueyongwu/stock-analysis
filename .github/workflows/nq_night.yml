@@ -1,0 +1,32 @@
+name: nq-night
+
+on:
+  schedule:
+    # UTC 21:00 = 北京 05:00。新浪 MinLine 只返回当前盘, 北京 06:00 切新盘,
+    # 而 NQ 每日 05:00 收盘 —— 05:00~06:00 这一小时抓到的必是「刚收完的完整整夜盘」,
+    # 天然容忍 GitHub Actions 常见的 10~50 分钟 cron 延迟。
+    # 0-4 = UTC 周日~周四, 对应北京周一~周五凌晨(周一那次补的是上周五夜盘)。
+    - cron: "0 21 * * 0-4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install pandas pyarrow requests
+      - run: python nq_overnight.py
+      - name: commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add nq_data.js cache/nq_min.parquet
+          git diff --cached --quiet || git commit -m "chore: nq night update $(date -u +%F)"
+          git pull --rebase
+          git push
