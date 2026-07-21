@@ -2,7 +2,8 @@ name: daily-update
 
 on:
   schedule:
-    - cron: "0 10 * * 1-5"  # UTC 10:00 = 北京 18:00, 工作日; baostock 当日数据 ~17:30 后可用
+    - cron: "10 7 * * 1-5"  # UTC 07:10 = 北京 15:10, 收盘后 10 分钟; 腾讯快照即时可用
+    - cron: "0 10 * * 1-5"  # UTC 10:00 = 北京 18:00, 兜底: 15:10 若落到 baostock 回退分支则当时无数据
   workflow_dispatch:          # 手动触发
 
 permissions:
@@ -28,7 +29,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data.js etf_data.js idx_data.js nq_data.js cache/daily_pctchg.parquet cache/intraday_159696_1min.parquet cache/nq_min.parquet
+          git add data.js etf_data.js idx_data.js nq_data.js cache/daily_pctchg.parquet cache/intraday_159696_1min.parquet cache/nq_min.parquet cache/st_codes.json
           git diff --cached --quiet || git commit -m "chore: daily data update $(date -u +%F)"
           git pull --rebase
           git push

@@ -20,28 +20,29 @@ open index.html           # 纯静态，无需服务器
 常用命令：
 
 ```bash
-python median_trend.py --update    # 收盘后增量更新（重拉最近10天窗口去重合并）
+python median_trend.py --update    # 收盘后增量更新（腾讯批量快照，~1.5 秒）
 python median_trend.py --refresh   # 删缓存全量重拉
 ```
 
 ## 工作原理
 
 ```
-baostock 逐股日线涨跌幅
+腾讯批量快照(当日) / baostock 逐股日线(历史)
   → cache/daily_pctchg.parquet   (长表缓存，断点续传)
   → 按日聚合中位数
   → data.js                      (window.MEDIAN_DATA)
   → index.html                   (ECharts 渲染)
 ```
 
-- 数据源 [baostock](http://baostock.com)，免费无需 token；当日数据约 17:30 后可用
+- 当日增量走腾讯行情 `qt.gtimg.cn`，全市场 7 个请求约 1.5 秒，15:00 收盘即可用
+- 历史与兜底走 [baostock](http://baostock.com)，免费无需 token；当日数据约 17:30 后可用
 - 样本范围：沪主板/科创板（sh.6）、深主板（sz.0）、创业板（sz.30），不含北交所和 B 股
 - 停牌日剔除；非交易日自动跳过
 - 只展示今年以来数据
 
 ## 自动更新
 
-`.github/workflows/update.yml`：每个工作日北京时间 18:30 运行 `--update`，提交 `data.js` 和 parquet 缓存。也可在 Actions 页手动触发。
+`.github/workflows/update.yml`：每个工作日北京时间 15:10 运行 `--update`（收盘后 10 分钟，腾讯快照即时可用），18:00 再跑一次兜底，提交 `data.js` 和 parquet 缓存。也可在 Actions 页手动触发。
 
 ## 附带脚本
 

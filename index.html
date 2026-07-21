@@ -196,7 +196,8 @@ if(!IX || !$('#idx')){  // 缺数据或 data.js 缺失时 wrap 已被替换
     tooltip:{trigger:'item', confine:true, backgroundColor:'#111', borderColor:C.grid, borderWidth:1,
       textStyle:{color:C.ink, fontSize:12},
       formatter:p=>{const it=items[p.dataIndex];
-        return `${it.name}<br>今年以来 <b>${fmt(it.ytd)}</b><br>收盘 ${it.close} · ${it.date}`;}},
+        return `${it.name}<br>今年以来 <b>${fmt(it.ytd)}</b><br>收盘 ${it.close} · ${it.date}`
+          + (it.stale ? `<br><span style="color:${C.muted}">数据源失败，沿用上次</span>` : '');}},
     xAxis:{type:'value', boundaryGap:MOBILE?['4%','4%']:[0,0],  // 仅移动端留白, PC 维持原状
       axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
       splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
@@ -208,7 +209,7 @@ if(!IX || !$('#idx')){  // 缺数据或 data.js 缺失时 wrap 已被替换
                position:inside(i.ytd) ? (i.ytd>=0?'insideRight':'insideLeft')
                                       : (i.ytd>=0?'right':'left'),
                color:inside(i.ytd) ? '#fff' : C.ink2},
-        itemStyle:{color:i.ytd>=0?C.up:C.down,
+        itemStyle:{color:i.ytd>=0?C.up:C.down, opacity:i.stale?.35:1,  // stale = 该源今日失败, 沿用上次
                    borderRadius:i.ytd>=0?[0,4,4,0]:[4,0,0,4]}})),
       markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline},
         data:[{xAxis:0}], label:{show:false}}}],
@@ -218,7 +219,7 @@ if(!IX || !$('#idx')){  // 缺数据或 data.js 缺失时 wrap 已被替换
 addEventListener('resize', ()=>{ mMain?.resize(); mCum?.resize(); mIdx?.resize(); });
 
 $('#foot').innerHTML =
-  '数据源：baostock(日线)；指数：新浪 / 中证指数 / 同花顺 · 免费无需 token。'+
+  '数据源：腾讯行情(当日) + baostock(历史)；指数：腾讯 / 新浪 / 中证指数 / 同花顺 · 免费无需 token。'+
   '<br>中位数 = 全市场当日涨跌幅排序取中，剔除停牌；抗极端值，反映"多数个股"的真实涨跌，不受权重股绑架。';
 </script>
 </body>
