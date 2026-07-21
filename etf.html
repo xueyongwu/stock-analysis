@@ -310,8 +310,9 @@ function nqClosed(t){
   if(d === 1) return h < 6;    // 周一 06:00 开盘前
   return false;
 }
+const nqLblDate = lbl => new Date(NQ_YR, +lbl.slice(0,2)-1, +lbl.slice(3,5), 15, 0);
 function nqFrame(startLbl){
-  const s=new Date(NQ_YR, +startLbl.slice(0,2)-1, +startLbl.slice(3,5), 15, 0);
+  const s=nqLblDate(startLbl);
   const e=new Date(s);
   do{ e.setDate(e.getDate()+1); }while(e.getDay()%6===0);  // 下一工作日
   e.setHours(15,0,0,0);
@@ -341,6 +342,28 @@ function buildNqIntraday(){
       markLine:{silent:true, symbol:'none', lineStyle:{color:C.muted, type:'dashed', width:1.5, opacity:.9},
         data:[{yAxis:0}], label:{show:false}}}],
   });
+}
+// bar 字段: 首行比常规行多4个前缀, 统一从尾部取 [-1]=时间戳 "YYYY-MM-DD HH:MM:SS" [-5]=价
+const nqTs = b => b[b.length-1], nqPx = b => +b[b.length-5];
+// A股 15:00 一过就换隔夜窗口: 拿实时 bar 里的当日 15:00 价当新基准, 不等 CI(18:00)。
+// 同 nq_overnight.py 的 crossed 逻辑; 节假日按工作日近似, CI 收盘后校正。
+function nqRebase(item, live){
+  const s0 = nqLblDate(item.path[0][0]);  // 当前窗口起点
+  let hit = null;
+  for(const b of live){
+    const ts = nqTs(b);
+    if(ts.slice(11) !== '15:00:00') continue;
+    const d = new Date(ts.replace(/-/g, '/'));  // Safari 不认 "YYYY-MM-DD HH:MM:SS"
+    if(d > s0 && d.getDay()%6 !== 0) hit = b;
+  }
+  if(!hit || nqTs(live[live.length-1]) <= nqTs(hit)) return;  // 起点之后还得有 bar
+  const ts = nqTs(hit);
+  item.base = item.open = nqPx(hit);
+  item.pct = 0;
+  item.partial = true;  // 新窗口必然进行中, 交给下游按最新 bar 重算
+  item.d = ts.slice(0,10);
+  item.t = ts.slice(0,16);
+  item.path = [[ts.slice(5,16), 0]];
 }
 function renderNqIntraday(item, live){
   if(!mNqI || !item.path || !item.path.length) return;
@@ -387,6 +410,7 @@ if(!NQ || !NQ.items?.length || !$('#nqIntraday')){  // ETF 数据缺失时 wrap 
     s.src=NQ_URL+'&_='+Date.now();
     s.onload=()=>{ done();
       try{ const r=window.t.minLine_1d;  // ponytail: 全局 t 名通用, 页面无同名冲突
+        nqRebase(last, r);  // 过了 15:00 先换窗口, 再画
         renderNqIntraday(last, r);
         if(last.partial){ const b=r[r.length-1];  // 半程点: base 固定, 只重算实时价
           last.open=+(+b[b.length-5]).toFixed(2);
