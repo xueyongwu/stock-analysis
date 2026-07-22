@@ -198,7 +198,7 @@ if(!IX || !$('#idx')){  // 缺数据或 data.js 缺失时 wrap 已被替换
       formatter:p=>{const it=items[p.dataIndex];
         return `${it.name}<br>今年以来 <b>${fmt(it.ytd)}</b><br>收盘 ${it.close} · ${it.date}`
           + (it.stale ? `<br><span style="color:${C.muted}">数据源失败，沿用上次</span>` : '');}},
-    xAxis:{type:'value', boundaryGap:MOBILE?['4%','4%']:[0,0],  // 仅移动端留白, PC 维持原状
+    xAxis:{type:'value', boundaryGap:['6%','6%'],  // 两端留白: 最长柱的外置标签否则会被 grid 裁掉
       axisLabel:{color:C.muted, fontSize:11, formatter:'{value}%'},
       splitLine:{lineStyle:{color:C.grid}}, axisLine:{show:false}, axisTick:{show:false}},
     yAxis:{type:'category', data:items.map(i=>i.name),
