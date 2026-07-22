@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "NQ 隔夜",
+  "version": "1.0",
+  "description": "纳指期货隔夜涨跌幅, 工具栏 badge 显示, 点击开看板",
+  "permissions": ["alarms"],
+  "host_permissions": [
+    "https://raw.githubusercontent.com/*",
+    "https://stock2.finance.sina.com.cn/*"
+  ],
+  "background": { "service_worker": "sw.js", "type": "module" },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_title": "NQ 隔夜",
+    "default_icon": { "16": "icon16.png", "32": "icon32.png" }
+  }
+}
