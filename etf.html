@@ -294,7 +294,7 @@ if(!D || !D.kline.length){
 }
 
 // 纳指期货隔夜涨跌柱状图(数据独立累积, 缺 nq_data.js 或尚无点位则隐藏卡片)
-let mNqI;
+let mNqI, nqLen=0;  // nqLen: 当前 x 轴槽数, 给 axisLabel.interval 判末尾
 
 // NQ 隔夜分时: 上一A股收盘(15:00)=0 到目前的涨跌幅走势。
 // 静态 path (nq_data.js, 上一收盘→缓存末) + 进行中时叠加实时 minLine tail(今06:00→now, 按 base 换算 pct)。
@@ -326,12 +326,15 @@ function nqFrame(startLbl){
 function buildNqIntraday(){
   mNqI = echarts.init($('#nqIntraday'), null, {renderer:'canvas'});
   mNqI.setOption({
-    grid:{left:GL, right:MOBILE?12:20, top:20, bottom:28},
+    grid:{left:GL, right:MOBILE?24:20, top:20, bottom:28},  // right 留够末尾 15:00 标签半宽
     tooltip:tip,
     xAxis:{type:'category', boundaryGap:false, axisLine:{lineStyle:{color:C.baseline}},
            axisTick:{show:false},
            axisLabel:{color:C.muted, fontSize:11, formatter:v=>v.slice(-5),  // 只显 HH:MM
-                      interval:(i,v)=>/:00$/.test(v) && +v.slice(-5,-3)%3===0}},  // 每3小时标
+                      // 首尾(上一收盘15:00 / 次收盘15:00)恒显; 中间窄屏每6小时标
+                      // (3小时在移动端会挤, 且闭市段被剔后 03:00/06:00 更近)
+                      interval:(i,v)=>i===0 || i===nqLen-1 ||
+                        (/:00$/.test(v) && +v.slice(-5,-3)%(MOBILE?6:3)===0)}},
     yAxis:{...yBase(), axisLabel:{color:C.muted, fontSize:11,
              formatter:v=>{if(Math.abs(v)<0.005)v=0; return (v>0?'+':'')+v.toFixed(2)+'%';}},
            axisPointer:{label:{formatter:o=>(o.value>0?'+':'')+o.value.toFixed(2)+'%'}}},
@@ -375,6 +378,7 @@ function renderNqIntraday(item, live){
     for(const b of live) m.set(b[b.length-1].slice(5,16), +((+b[b.length-5]/base-1)*100).toFixed(2)+0);
   // 固定框 15:00->次收盘15:00, 数据填入, 空槽 null(右侧留空)
   const t=nqFrame(item.path[0][0]);
+  nqLen=t.length;
   const c=t.map(l=>m.has(l)?m.get(l):null);
   // 同 ETF 分时: 围绕基准(0=上一A股收盘)对称定界, 3等分
   const dev = Math.max(...c.filter(v=>v!=null).map(Math.abs)) || 1;
