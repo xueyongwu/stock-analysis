@@ -136,10 +136,10 @@ def fetch_history(codes: list[str], start: str, end: str, skip_done: bool = True
                     }))
             if i % 100 == 0:
                 print(f"  {i}/{len(todo)} ...", flush=True)
-                pd.concat(rows, ignore_index=True).to_parquet(RAW)  # 阶段落盘
+                pd.concat(rows, ignore_index=True).to_parquet(RAW, index=False)  # 阶段落盘
 
     out = pd.concat(rows, ignore_index=True).drop_duplicates(["date", "code"])
-    out.to_parquet(RAW)
+    out.to_parquet(RAW, index=False)  # 长表不存行号, 省 ~5MB
     return out
 
 
@@ -199,7 +199,7 @@ def update_today_tencent(codes: list[str], day: str) -> pd.DataFrame | None:
     today = pd.DataFrame({"date": pd.Timestamp(day), "code": list(quotes), "pct": list(quotes.values())})
     out = (pd.concat([have, today], ignore_index=True)
              .drop_duplicates(["date", "code"], keep="last"))  # 重跑以新快照为准
-    out.to_parquet(RAW)
+    out.to_parquet(RAW, index=False)  # 长表不存行号, 省 ~5MB
     print(f"腾讯快照 {day}: {len(quotes)} 只。", flush=True)
     return out
 
@@ -243,6 +243,50 @@ def st_codes() -> set[str]:
     ST.write_text(json.dumps({"updated": pd.Timestamp.now().strftime("%Y-%m-%d"),
                               "codes": sorted(out)}), encoding="utf-8")
     return out
+
+
+def update_incremental(end: str) -> pd.DataFrame | None:
+    """收盘后增量。返回 None = 非交易日或拿不到可信当日数据, 调用方直接退出不写盘。
+
+    baostock 只用来查交易日历、代码表和回退拉取——数据主源已是腾讯, 所以它挂了要能降级:
+    代码表退回缓存里最近交易日那份(漏掉当天新上市的几只, 5000 只样本的中位数无感),
+    交易日判断交给腾讯快照自己——节假日快照返回的是上个交易日的陈旧时间戳,
+    parse_tencent_quotes 的日期校验会全过滤掉, 覆盖率为 0 自然判定不写。
+    """
+    recent = (pd.Timestamp(end) - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
+    days, codes, bs_ok = None, None, True
+    try:
+        with bs_session():  # 日历/代码表共用一次登录
+            days = trading_days(recent, end)
+            if end not in days:
+                print(f"{end} 非交易日, 跳过。", flush=True)
+                return None
+            codes = all_a_codes(end)
+    except Exception as e:
+        bs_ok = False
+        print(f"baostock 不可用({e}), 降级: 缓存代码表 + 腾讯快照自判交易日。", flush=True)
+
+    have = pd.read_parquet(RAW) if RAW.exists() else None
+    if codes is None:
+        if have is None:
+            raise RuntimeError("baostock 不可用且无缓存, 无从确定股票池")
+        last = have["date"].max()
+        codes = sorted(have.loc[have["date"] == last, "code"].unique())
+        print(f"用 {last:%Y-%m-%d} 的缓存代码表 {len(codes)} 只。", flush=True)
+
+    cached = set(have["date"].dt.strftime("%Y-%m-%d")) if have is not None else set()
+    gaps = [d for d in (days or []) if d != end and d not in cached]
+    df = None
+    if gaps:  # CI 漏跑过, 腾讯只给当日, 补不了 -> 走 baostock 窗口
+        print(f"缓存缺 {gaps}, 走 baostock 重拉窗口。", flush=True)
+    else:
+        df = update_today_tencent(codes, end)
+    if df is None and not bs_ok:  # 回退路径也要 baostock, 它挂着就别写半截数据
+        print("腾讯无当日数据且 baostock 不可用, 本次不更新。", flush=True)
+        return None
+    if df is None:  # baostock 增量: 重拉最近10天窗口, 按 (date,code) 去重合并
+        df = fetch_history(codes, recent, end, skip_done=False)
+    return df
 
 
 def sanity_check(p: dict):
@@ -309,29 +353,15 @@ def main():
     a = ap.parse_args()
 
     if a.update:
-        recent = (pd.Timestamp(a.end) - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
-        with bs_session():  # 日历/代码表/回退拉取共用一次登录
-            days = trading_days(recent, a.end)
-            if a.end not in days:
-                print(f"{a.end} 非交易日, 跳过。", flush=True)
+        # 盘中快照会被当成收盘价写死(次日的 --update 只取新一天, 不回补), 故未收盘不落库
+        now = pd.Timestamp.now(tz="Asia/Shanghai")
+        if a.end == now.strftime("%Y-%m-%d") and now.hour < 15 and RAW.exists():
+            print(f"{a.end} 尚未收盘({now:%H:%M}), 不落库, 仅用缓存导出。", flush=True)
+            df = pd.read_parquet(RAW)
+        else:
+            df = update_incremental(a.end)
+            if df is None:  # 非交易日, 或没有可信的当日数据
                 return
-            # 盘中快照会被当成收盘价写死(次日的 --update 只取新一天, 不回补), 故未收盘不落库
-            now = pd.Timestamp.now(tz="Asia/Shanghai")
-            if a.end == now.strftime("%Y-%m-%d") and now.hour < 15 and RAW.exists():
-                print(f"{a.end} 尚未收盘({now:%H:%M}), 不落库, 仅用缓存导出。", flush=True)
-                df = pd.read_parquet(RAW)
-            else:
-                codes = all_a_codes(a.end)
-                cached = (set(pd.read_parquet(RAW)["date"].dt.strftime("%Y-%m-%d"))
-                          if RAW.exists() else set())
-                gaps = [d for d in days if d != a.end and d not in cached]
-                df = None
-                if gaps:  # CI 漏跑过, 腾讯只给当日, 补不了 -> 走 baostock 窗口
-                    print(f"缓存缺 {gaps}, 走 baostock 重拉窗口。", flush=True)
-                else:
-                    df = update_today_tencent(codes, a.end)
-                if df is None:  # baostock 增量: 重拉最近10天窗口, 按 (date,code) 去重合并
-                    df = fetch_history(codes, recent, a.end, skip_done=False)
     elif a.refresh or not RAW.exists():
         if a.refresh and RAW.exists():
             RAW.unlink()

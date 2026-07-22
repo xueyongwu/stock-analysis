@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install baostock pandas pyarrow akshare
+      - run: pip install baostock pandas pyarrow akshare requests  # requests 是腾讯快照主源用的, 别靠 akshare 传递依赖
       - run: python median_trend.py --update
       - run: python intraday_cache.py 159696
         continue-on-error: true  # 新浪接口偶发失败不阻断中位数更新
