@@ -177,26 +177,30 @@ function showDay(date){
   // 围绕昨收对称定界, 右轴 = 左轴同刻度换算涨跌幅%, 零位即昨收
   const dev = Math.max(...d.c.concat(avg).map(v=>Math.abs(v-prevClose))) || prevClose*0.01;
   const p = dev/prevClose*100;
+  // 新浪无成交的分钟不出 bar, 按下标铺 FULLT 会整体左移(尾点提前几分钟) -> 按时间落槽, 空槽 null
+  const sc=FULLT.map(()=>null), sa=FULLT.map(()=>null), sj=FULLT.map(()=>-1);
+  d.t.forEach((tt,j)=>{const k=FULLT.indexOf(tt); if(k<0) return; sc[k]=d.c[j]; sa[k]=avg[j]; sj[k]=j;});
   mI.setOption({
     yAxis:[{min:prevClose-dev, max:prevClose+dev, interval:dev/3,
             axisLabel:{color:C.muted, fontSize:11, formatter:v=>v.toFixed(3)}},
            {min:-p, max:p, interval:p/3}],
     tooltip:{...tip, formatter:ps=>{
-      const j = ps[0].dataIndex;
+      const j = sj[ps[0].dataIndex];
+      if(j < 0) return '';  // 空槽(该分钟无成交)
       return `${date} ${d.t[j]}<br>现价 <b>${px(d.c[j])}</b> (${pct(d.c[j],prevClose)})<br>`+
         `均价 ${px(avg[j])}<br>量 ${fmtVol(d.v[j])}`;
     }},
     xAxis:{data:FULLT},
-    series:[{data:d.c,
+    series:[{data:sc,
              // 午间分隔线
              markLine:{silent:true, symbol:'none', lineStyle:{color:C.baseline, width:1},
                        data:[{xAxis:'11:30'}], label:{show:false}}},
-            {data:avg},
+            {data:sa},
             {markLine:{silent:true, symbol:'none',
                        lineStyle:{color:C.muted, type:'dashed', width:1.5, opacity:.9},
                        data:[{yAxis:prevClose}], label:{show:false}}}],
   }, {replaceMerge:[]});
-  clampTip(mI, d.c.length-1);
+  clampTip(mI, sc.findLastIndex(v=>v!=null));
 }
 
 function buildIntraday(){
@@ -217,10 +221,10 @@ function buildIntraday(){
                   formatter:v=>{if(Math.abs(v)<0.005)v=0; return (v>0?'+':'')+v.toFixed(2)+'%';},
                   color:v=>v>0.005?C.up:v<-0.005?C.down:C.muted}}],
     series:[
-      {name:'现价', type:'line', showSymbol:false, lineStyle:{width:2, color:C.blue},
+      {name:'现价', type:'line', showSymbol:false, connectNulls:true, lineStyle:{width:2, color:C.blue},
        areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,
          [{offset:0,color:'rgba(57,135,229,.25)'},{offset:1,color:'rgba(57,135,229,0)'}])}},
-      {name:'均价', type:'line', showSymbol:false, lineStyle:{width:1.5, color:C.avg}},
+      {name:'均价', type:'line', showSymbol:false, connectNulls:true, lineStyle:{width:1.5, color:C.avg}},
       {name:'昨收', type:'line', data:[]},
     ],
   });
